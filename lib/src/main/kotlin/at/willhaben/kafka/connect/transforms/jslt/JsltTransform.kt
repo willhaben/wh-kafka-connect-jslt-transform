@@ -3,6 +3,7 @@ package at.willhaben.kafka.connect.transforms.jslt
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.JsonNodeType
 import com.schibsted.spt.data.jslt.Expression
 import com.schibsted.spt.data.jslt.Parser
 import org.apache.kafka.common.cache.Cache
@@ -10,12 +11,11 @@ import org.apache.kafka.common.cache.LRUCache
 import org.apache.kafka.common.cache.SynchronizedCache
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.connect.connector.ConnectRecord
-import org.apache.kafka.connect.data.*
-import org.apache.kafka.connect.errors.DataException
+import org.apache.kafka.connect.data.Schema
+import org.apache.kafka.connect.data.SchemaBuilder
 import org.apache.kafka.connect.json.JsonConverter
 import org.apache.kafka.connect.transforms.Transformation
 import org.apache.kafka.connect.transforms.util.Requirements
-import org.apache.kafka.connect.transforms.util.SchemaUtil
 import org.apache.kafka.connect.transforms.util.SimpleConfig
 import java.util.Collections.singletonMap
 
@@ -108,11 +108,50 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
 
             var outputSchema = schemaUpdateCache!![schema]
             if (outputSchema == null) {
-                outputSchema = jsonConverter.asConnectSchema(outputValueJsonNode)
+                outputSchema = schemaFromJsonObject(outputValueJsonNode)
                 schemaUpdateCache!!.put(schema, outputSchema)
             }
-            val outputValue =objectMapper.convertValue(outputValueJsonNode, object: TypeReference<Map<String, Any>>() {})
+            val outputValue =
+                objectMapper.convertValue(outputValueJsonNode, object : TypeReference<Map<String, Any>>() {})
             newRecord(record, outputSchema, outputValue)
+        }
+    }
+
+    private val typeMapping = mapOf(
+        JsonNodeType.BINARY to Schema.OPTIONAL_BYTES_SCHEMA,
+        JsonNodeType.BOOLEAN to Schema.OPTIONAL_BOOLEAN_SCHEMA,
+        JsonNodeType.NUMBER to Schema.OPTIONAL_FLOAT64_SCHEMA,
+        JsonNodeType.STRING to Schema.OPTIONAL_STRING_SCHEMA,
+        JsonNodeType.NULL to Schema.OPTIONAL_STRING_SCHEMA,
+        JsonNodeType.MISSING to Schema.OPTIONAL_STRING_SCHEMA
+    )
+
+    private fun schemaFromJsonObject(jsonNode: JsonNode): Schema {
+        val schemaBuilder=SchemaBuilder(Schema.Type.STRUCT)
+        jsonNode.fields().forEach { field ->
+            if (field.value.nodeType == JsonNodeType.ARRAY) {
+                schemaBuilder.field(field.key, schemaFromJsonArray(field.value))
+            } else if (field.value.nodeType == JsonNodeType.OBJECT || field.value.nodeType == JsonNodeType.POJO) {
+                schemaBuilder.field(field.key, schemaFromJsonObject(field.value))
+            } else {
+                schemaBuilder.field(field.key, typeMapping[field.value.nodeType])
+            }
+        }
+        return schemaBuilder.build()
+    }
+
+    private fun schemaFromJsonArray(jsonNode: JsonNode): Schema {
+        return if (jsonNode.elements().hasNext()) {
+            val element = jsonNode.elements().next()
+            if (element.nodeType == JsonNodeType.OBJECT || element.nodeType == JsonNodeType.POJO) {
+                SchemaBuilder.array(schemaFromJsonObject(element)).build()
+            } else if (element.nodeType == JsonNodeType.ARRAY) {
+                schemaFromJsonArray(element)
+            } else {
+                SchemaBuilder.array(typeMapping[element.nodeType]).build()
+            }
+        } else {
+            SchemaBuilder(Schema.Type.ARRAY).build()
         }
     }
 

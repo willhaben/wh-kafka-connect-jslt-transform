@@ -6,29 +6,31 @@ import org.apache.kafka.connect.data.Struct
 import org.apache.kafka.connect.errors.DataException
 import org.apache.kafka.connect.source.SourceRecord
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertArrayEquals
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.*
 import java.util.*
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 
-
 class JsltTransformTest {
     private val xformKey: JsltTransform<SourceRecord> = JsltTransform.Key()
     private val xformValue: JsltTransform<SourceRecord> = JsltTransform.Value()
+
     @AfterEach
     fun teardown() {
         xformKey.close()
         xformValue.close()
     }
 
+    fun configureNonTransformJslt(transform: JsltTransform<SourceRecord>) {
+        val props: MutableMap<String, String> = HashMap()
+        props["jslt"] = "."
+        transform.configure(props.toMap())
+    }
+
     @Test
     fun topLevelStructRequired() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         assertThrows(DataException::class.java) {
             xformValue.apply(
                 SourceRecord(
@@ -41,7 +43,7 @@ class JsltTransformTest {
 
     @Test
     fun topLevelMapRequired() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         assertThrows(DataException::class.java) {
             xformValue.apply(
                 SourceRecord(
@@ -54,7 +56,7 @@ class JsltTransformTest {
 
     @Test
     fun testNestedStruct() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         var builder = SchemaBuilder.struct()
         builder.field("int8", Schema.INT8_SCHEMA)
         builder.field("int16", Schema.INT16_SCHEMA)
@@ -109,7 +111,7 @@ class JsltTransformTest {
 
     @Test
     fun testNestedMapWithDelimiter() {
-        xformValue.configure(Collections.singletonMap("delimiter", "#"))
+        configureNonTransformJslt(xformValue)
         val supportedTypes: MutableMap<String, Any> = HashMap()
         supportedTypes["int8"] = 8.toByte()
         supportedTypes["int16"] = 16.toShort()
@@ -146,7 +148,7 @@ class JsltTransformTest {
 
     @Test
     fun testOptionalFieldStruct() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         var builder = SchemaBuilder.struct()
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA)
         val supportedTypesSchema = builder.build()
@@ -171,7 +173,7 @@ class JsltTransformTest {
 
     @Test
     fun testOptionalStruct() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         val builder = SchemaBuilder.struct().optional()
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA)
         val schema = builder.build()
@@ -188,7 +190,7 @@ class JsltTransformTest {
 
     @Test
     fun testOptionalNestedStruct() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         var builder = SchemaBuilder.struct().optional()
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA)
         val supportedTypesSchema = builder.build()
@@ -211,7 +213,7 @@ class JsltTransformTest {
 
     @Test
     fun testOptionalFieldMap() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         val supportedTypes: MutableMap<String, Any?> = HashMap()
         supportedTypes["opt_int32"] = null
         val oneLevelNestedMap = Collections.singletonMap<String, Any>("B", supportedTypes)
@@ -230,7 +232,7 @@ class JsltTransformTest {
 
     @Test
     fun testKey() {
-        xformKey.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         val key = Collections.singletonMap("A", Collections.singletonMap("B", 12))
         val src = SourceRecord(null, null, "topic", null, key, null, null)
         val transformed: SourceRecord = xformKey.apply(src)
@@ -242,7 +244,7 @@ class JsltTransformTest {
 
     @Test
     fun testSchemalessArray() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         val value: Any = Collections.singletonMap(
             "foo",
             Arrays.asList("bar", Collections.singletonMap("baz", Collections.singletonMap("lfg", "lfg")))
@@ -252,7 +254,7 @@ class JsltTransformTest {
 
     @Test
     fun testArrayWithSchema() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         val nestedStructSchema = SchemaBuilder.struct().field("lfg", Schema.STRING_SCHEMA).build()
         val innerStructSchema = SchemaBuilder.struct().field("baz", nestedStructSchema).build()
         val structSchema = SchemaBuilder.struct()
@@ -275,7 +277,7 @@ class JsltTransformTest {
         // If we have a nested structure where an entire sub-Struct is optional, all flattened fields generated from its
         // children should also be optional. Similarly, if the parent Struct has a default value, the default value for
         // the flattened field
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         val builder = SchemaBuilder.struct().optional()
         builder.field("req_field", Schema.STRING_SCHEMA)
         builder.field("opt_field", SchemaBuilder.string().optional().defaultValue("child_default").build())
@@ -301,7 +303,7 @@ class JsltTransformTest {
 
     @Test
     fun tombstoneEventWithoutSchemaShouldPassThrough() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         val record = SourceRecord(
             null, null, "test", 0,
             null, null
@@ -313,7 +315,7 @@ class JsltTransformTest {
 
     @Test
     fun tombstoneEventWithSchemaShouldPassThrough() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
         val simpleStructSchema =
             SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA)
                 .build()
@@ -328,7 +330,7 @@ class JsltTransformTest {
 
     @Test
     fun testMapWithNullFields() {
-        xformValue.configure(emptyMap<String?, String>())
+        configureNonTransformJslt(xformValue)
 
         // Use a LinkedHashMap to ensure the SMT sees entries in a specific order
         val value: MutableMap<String, Any?> = LinkedHashMap()
@@ -344,7 +346,7 @@ class JsltTransformTest {
 
     @Test
     fun testStructWithNullFields() {
-        xformValue.configure(emptyMap<String?, String?>())
+        configureNonTransformJslt(xformValue)
         val structSchema = SchemaBuilder.struct()
             .field("firstNull", Schema.OPTIONAL_STRING_SCHEMA)
             .field("firstNonNull", Schema.OPTIONAL_STRING_SCHEMA)
