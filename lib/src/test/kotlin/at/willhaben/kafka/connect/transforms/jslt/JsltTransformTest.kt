@@ -75,10 +75,10 @@ class JsltTransformTest {
         builder.field("A", oneLevelNestedSchema)
         val twoLevelNestedSchema = builder.build()
         val supportedTypes = Struct(supportedTypesSchema)
-        supportedTypes.put("int8", 8.toByte())
-        supportedTypes.put("int16", 16.toShort())
-        supportedTypes.put("int32", 32)
-        supportedTypes.put("int64", 64.toLong())
+        supportedTypes.put("int8", Byte.MAX_VALUE)
+        supportedTypes.put("int16", Short.MAX_VALUE)
+        supportedTypes.put("int32", Int.MAX_VALUE)
+        supportedTypes.put("int64", Long.MAX_VALUE)
         supportedTypes.put("float32", 32f)
         supportedTypes.put("float64", 64.0)
         supportedTypes.put("boolean", true)
@@ -97,16 +97,19 @@ class JsltTransformTest {
         )
         assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type())
         val transformedStruct = transformed.value() as Struct
-        assertEquals(9, transformedStruct.schema().fields().size)
-        assertEquals(8, transformedStruct.getInt8("A.B.int8") as Byte)
-        assertEquals(16, transformedStruct.getInt16("A.B.int16") as Short)
-        assertEquals(32, transformedStruct.getInt32("A.B.int32") as Int)
-        assertEquals(64L, transformedStruct.getInt64("A.B.int64") as Long)
-        assertEquals(32f, transformedStruct.getFloat32("A.B.float32"), 0f)
-        assertEquals(64.0, transformedStruct.getFloat64("A.B.float64"), 0.0)
-        assertEquals(true, transformedStruct.getBoolean("A.B.boolean"))
-        assertEquals("stringy", transformedStruct.getString("A.B.string"))
-        assertArrayEquals("bytes".toByteArray(), transformedStruct.getBytes("A.B.bytes"))
+        val nestedStruct = ((transformed.value() as Struct).get("A") as Struct).get("B") as Struct
+        println(transformedStruct)
+        println(nestedStruct.get("bytes").javaClass.name)
+        assertEquals(9, nestedStruct.schema().fields().size)
+        assertEquals(Byte.MAX_VALUE.toInt(), nestedStruct.getInt32("int8") as Int)
+        assertEquals(Short.MAX_VALUE.toInt(), nestedStruct.getInt32("int16"))
+        assertEquals(Int.MAX_VALUE, nestedStruct.getInt32("int32"))
+        assertEquals(Long.MAX_VALUE, nestedStruct.get("int64") as Long)
+        assertEquals(32.0, nestedStruct.getFloat64("float32"), 0.0)
+        assertEquals(64.0, nestedStruct.getFloat64("float64"), 0.0)
+        assertEquals(true, nestedStruct.getBoolean("boolean"))
+        assertEquals("stringy", nestedStruct.getString("string"))
+        assertEquals(Base64.getEncoder().encodeToString("bytes".toByteArray()), nestedStruct.get("bytes"))
     }
 
     @Test
@@ -224,19 +227,18 @@ class JsltTransformTest {
                 null, oneLevelNestedMap
             )
         )
-        assertNull(transformed.valueSchema())
-        assertTrue(transformed.value() is Map<*, *>)
-        val transformedMap = transformed.value() as Map<String, Any>
+        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type())
+        val transformedMap = transformed.value() as Struct
         assertNull(transformedMap["B.opt_int32"])
     }
 
     @Test
     fun testKey() {
-        configureNonTransformJslt(xformValue)
+        configureNonTransformJslt(xformKey)
         val key = Collections.singletonMap("A", Collections.singletonMap("B", 12))
         val src = SourceRecord(null, null, "topic", null, key, null, null)
         val transformed: SourceRecord = xformKey.apply(src)
-        assertNull(transformed.keySchema())
+        assertTrue(transformed.keySchema() is Schema)
         assertTrue(transformed.key() is Map<*, *>)
         val transformedMap = transformed.key() as Map<String, Any>
         assertEquals(12, transformedMap["A.B"])

@@ -1,6 +1,5 @@
 package at.willhaben.kafka.connect.transforms.jslt
 
-import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeType
@@ -13,6 +12,7 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.connect.connector.ConnectRecord
 import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.connect.data.SchemaBuilder
+import org.apache.kafka.connect.data.Struct
 import org.apache.kafka.connect.json.JsonConverter
 import org.apache.kafka.connect.transforms.Transformation
 import org.apache.kafka.connect.transforms.util.Requirements
@@ -81,60 +81,113 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
 
     protected abstract fun newRecord(record: R?, updatedSchema: Schema?, updatedValue: Any?): R
 
-    private fun operatingTopic(record: R?): String? = record?.topic()
-
     protected abstract fun getJsonConverterConfig(record: R?): Pair<Map<String, Any>, Boolean>
 
 
     private fun applySchemaless(record: R): R {
         val value = Requirements.requireMap(operatingValue(record), PURPOSE)
         val inputValueJsonNode = objectMapper.valueToTree<JsonNode>(value)
-        val outputValueJsonNode = jsltExpression.apply(inputValueJsonNode)
-        return newRecord(record, null, outputValueJsonNode)
+        val outputValue = convert(inputValueJsonNode)
+        return newRecord(record, outputValue?.schema(), outputValue)
     }
 
 
     private fun applyWithSchema(record: R): R {
         val value = Requirements.requireStructOrNull(operatingValue(record), PURPOSE)
         val schema = operatingSchema(record)
-        val topic = operatingTopic(record)
+        val topic = record?.topic()
 
         return if (value == null) {
             newRecord(record, schema, null)
         } else {
             val valueAsJsonBytes = jsonConverter.fromConnectData(topic, schema, value)
             val inputValueJsonNode = objectMapper.readTree(valueAsJsonBytes)
-            val outputValueJsonNode = jsltExpression.apply(inputValueJsonNode)
-
-            var outputSchema = schemaUpdateCache!![schema]
-            if (outputSchema == null) {
-                outputSchema = schemaFromJsonObject(outputValueJsonNode)
-                schemaUpdateCache!!.put(schema, outputSchema)
-            }
-            val outputValue =
-                objectMapper.convertValue(outputValueJsonNode, object : TypeReference<Map<String, Any>>() {})
-            newRecord(record, outputSchema, outputValue)
+            val outputValue = convert(inputValueJsonNode)
+            newRecord(record, outputValue?.schema(), outputValue)
         }
     }
 
-    private val typeMapping = mapOf(
-        JsonNodeType.BINARY to Schema.OPTIONAL_BYTES_SCHEMA,
-        JsonNodeType.BOOLEAN to Schema.OPTIONAL_BOOLEAN_SCHEMA,
-        JsonNodeType.NUMBER to Schema.OPTIONAL_FLOAT64_SCHEMA,
-        JsonNodeType.STRING to Schema.OPTIONAL_STRING_SCHEMA,
-        JsonNodeType.NULL to Schema.OPTIONAL_STRING_SCHEMA,
-        JsonNodeType.MISSING to Schema.OPTIONAL_STRING_SCHEMA
-    )
+    private fun convert(inputValueJsonNode: JsonNode): Struct? {
+        val outputValueJsonNode = jsltExpression.apply(inputValueJsonNode)
+        return if (outputValueJsonNode != null) {
+            val outputSchema = schemaFromJsonObject(outputValueJsonNode)
+            val outputValue = Struct(outputSchema)
+            outputValueJsonNode.fields().forEach { (fieldName, fieldValue) ->
+                jsonNodeToStruct(fieldValue, outputSchema.field(fieldName).schema(), outputValue, fieldName)
+            }
+            outputValue
+        } else {
+            null
+        }
+    }
+
+    private fun jsonNodeToStruct(
+        jsonNode: JsonNode,
+        schema: Schema,
+        struct: Struct? = null,
+        fieldName: String? = null
+    ) {
+        when (jsonNode.nodeType) {
+            JsonNodeType.ARRAY -> {
+                val array = convertJsonNodeToValue(jsonNode, schema.valueSchema())
+                struct?.put(fieldName, array)
+            }
+            JsonNodeType.POJO, JsonNodeType.OBJECT -> {
+                val subStruct = convertJsonNodeToValue(jsonNode, schema)
+                struct?.put(fieldName, subStruct)
+            }
+            else -> {
+                val value = convertJsonNodeToValue(jsonNode)
+                struct?.put(fieldName, value)
+            }
+        }
+    }
+
+    private fun convertJsonNodeToValue(jsonNode: JsonNode, schema: Schema? = null): Any? {
+        return when (jsonNode.nodeType) {
+            JsonNodeType.ARRAY -> {
+                if (jsonNode.elements().hasNext()) {
+                    jsonNode.elements().asSequence().map { elem ->
+                        convertJsonNodeToValue(elem, schema!!.valueSchema())
+                    }.toList()
+                } else {
+                    null
+                }
+            }
+            JsonNodeType.BINARY -> jsonNode.binaryValue()
+            JsonNodeType.BOOLEAN -> jsonNode.booleanValue()
+            JsonNodeType.MISSING -> null
+            JsonNodeType.NULL -> null
+            JsonNodeType.NUMBER -> {
+                when {
+                    jsonNode.isBigDecimal -> jsonNode.decimalValue()
+                    jsonNode.isDouble -> jsonNode.doubleValue()
+                    jsonNode.isBigInteger -> jsonNode.bigIntegerValue()
+                    jsonNode.isFloat -> jsonNode.floatValue()
+                    jsonNode.isInt -> jsonNode.intValue()
+                    else -> if (jsonNode.isFloatingPointNumber) jsonNode.doubleValue() else jsonNode.asLong()
+                }
+            }
+            JsonNodeType.POJO, JsonNodeType.OBJECT -> {
+                val subStruct = Struct(schema)
+                jsonNode.fields().forEach { (key, field) ->
+                    jsonNodeToStruct(field, schema!!.field(key).schema(), subStruct, key)
+                }
+                subStruct
+            }
+            JsonNodeType.STRING -> jsonNode.textValue()
+        }
+    }
 
     private fun schemaFromJsonObject(jsonNode: JsonNode): Schema {
-        val schemaBuilder=SchemaBuilder(Schema.Type.STRUCT)
+        val schemaBuilder = SchemaBuilder(Schema.Type.STRUCT)
         jsonNode.fields().forEach { field ->
             if (field.value.nodeType == JsonNodeType.ARRAY) {
                 schemaBuilder.field(field.key, schemaFromJsonArray(field.value))
             } else if (field.value.nodeType == JsonNodeType.OBJECT || field.value.nodeType == JsonNodeType.POJO) {
                 schemaBuilder.field(field.key, schemaFromJsonObject(field.value))
             } else {
-                schemaBuilder.field(field.key, typeMapping[field.value.nodeType])
+                schemaBuilder.field(field.key, getPrimitiveType(field.value))
             }
         }
         return schemaBuilder.build()
@@ -148,11 +201,34 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
             } else if (element.nodeType == JsonNodeType.ARRAY) {
                 schemaFromJsonArray(element)
             } else {
-                SchemaBuilder.array(typeMapping[element.nodeType]).build()
+                SchemaBuilder.array(getPrimitiveType(element)).build()
             }
         } else {
             SchemaBuilder(Schema.Type.ARRAY).build()
         }
+    }
+
+    private fun getPrimitiveType(jsonNode: JsonNode): Schema {
+        return when (jsonNode.nodeType) {
+            JsonNodeType.BINARY -> Schema.OPTIONAL_BYTES_SCHEMA
+            JsonNodeType.BOOLEAN -> Schema.OPTIONAL_BOOLEAN_SCHEMA
+            JsonNodeType.STRING -> Schema.OPTIONAL_STRING_SCHEMA
+            JsonNodeType.NULL -> Schema.OPTIONAL_STRING_SCHEMA
+            JsonNodeType.NUMBER -> when {
+                jsonNode.isShort -> Schema.OPTIONAL_INT16_SCHEMA
+                jsonNode.isInt -> Schema.OPTIONAL_INT32_SCHEMA
+                jsonNode.isLong -> Schema.OPTIONAL_INT64_SCHEMA
+                jsonNode.isBigInteger -> Schema.OPTIONAL_INT64_SCHEMA
+                jsonNode.isFloat -> Schema.OPTIONAL_FLOAT32_SCHEMA
+                jsonNode.isDouble -> Schema.FLOAT64_SCHEMA
+                jsonNode.isBigDecimal -> Schema.OPTIONAL_FLOAT64_SCHEMA
+                else -> throw TypeCastException("Unsupported numerical type for ${jsonNode}")
+            }
+            JsonNodeType.MISSING -> Schema.OPTIONAL_STRING_SCHEMA
+            else -> throw UnsupportedOperationException("The type ${jsonNode.nodeType} is not a primitive!")
+        }
+
+
     }
 
 
