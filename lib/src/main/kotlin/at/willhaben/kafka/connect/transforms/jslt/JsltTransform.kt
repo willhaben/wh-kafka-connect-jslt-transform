@@ -13,6 +13,7 @@ import org.apache.kafka.connect.connector.ConnectRecord
 import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.connect.data.SchemaBuilder
 import org.apache.kafka.connect.data.Struct
+import org.apache.kafka.connect.errors.DataException
 import org.apache.kafka.connect.json.JsonConverter
 import org.apache.kafka.connect.transforms.Transformation
 import org.apache.kafka.connect.transforms.util.Requirements
@@ -129,7 +130,7 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
     ) {
         when (jsonNode.nodeType) {
             JsonNodeType.ARRAY -> {
-                val array = convertJsonNodeToValue(jsonNode, schema.valueSchema())
+                val array = convertJsonNodeToValue(jsonNode, schema)
                 struct?.put(fieldName, array)
             }
             JsonNodeType.POJO, JsonNodeType.OBJECT -> {
@@ -160,11 +161,13 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
             JsonNodeType.NULL -> null
             JsonNodeType.NUMBER -> {
                 when {
-                    jsonNode.isBigDecimal -> jsonNode.decimalValue()
-                    jsonNode.isDouble -> jsonNode.doubleValue()
-                    jsonNode.isBigInteger -> jsonNode.bigIntegerValue()
                     jsonNode.isFloat -> jsonNode.floatValue()
+                    jsonNode.isDouble -> jsonNode.doubleValue()
+                    jsonNode.isBigDecimal -> jsonNode.decimalValue().toPlainString()
+                    jsonNode.isShort -> jsonNode.shortValue()
                     jsonNode.isInt -> jsonNode.intValue()
+                    jsonNode.isLong -> jsonNode.longValue()
+                    jsonNode.isBigInteger -> jsonNode.bigIntegerValue()
                     else -> if (jsonNode.isFloatingPointNumber) jsonNode.doubleValue() else jsonNode.asLong()
                 }
             }
@@ -199,7 +202,7 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
             if (element.nodeType == JsonNodeType.OBJECT || element.nodeType == JsonNodeType.POJO) {
                 SchemaBuilder.array(schemaFromJsonObject(element)).build()
             } else if (element.nodeType == JsonNodeType.ARRAY) {
-                schemaFromJsonArray(element)
+                SchemaBuilder.array(schemaFromJsonArray(element))
             } else {
                 SchemaBuilder.array(getPrimitiveType(element)).build()
             }
@@ -218,14 +221,14 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
                 jsonNode.isShort -> Schema.OPTIONAL_INT16_SCHEMA
                 jsonNode.isInt -> Schema.OPTIONAL_INT32_SCHEMA
                 jsonNode.isLong -> Schema.OPTIONAL_INT64_SCHEMA
-                jsonNode.isBigInteger -> Schema.OPTIONAL_INT64_SCHEMA
+                jsonNode.isBigInteger -> Schema.OPTIONAL_STRING_SCHEMA
                 jsonNode.isFloat -> Schema.OPTIONAL_FLOAT32_SCHEMA
-                jsonNode.isDouble -> Schema.FLOAT64_SCHEMA
-                jsonNode.isBigDecimal -> Schema.OPTIONAL_FLOAT64_SCHEMA
-                else -> throw TypeCastException("Unsupported numerical type for ${jsonNode}")
+                jsonNode.isDouble -> Schema.OPTIONAL_FLOAT64_SCHEMA
+                jsonNode.isBigDecimal -> Schema.OPTIONAL_STRING_SCHEMA
+                else -> throw DataException("Unsupported numerical type for ${jsonNode}")
             }
             JsonNodeType.MISSING -> Schema.OPTIONAL_STRING_SCHEMA
-            else -> throw UnsupportedOperationException("The type ${jsonNode.nodeType} is not a primitive!")
+            else -> throw DataException("The type ${jsonNode.nodeType} is not a primitive!")
         }
 
 
