@@ -206,16 +206,6 @@ class JsltTransformTest {
         .put("float32Value", Float.MAX_VALUE)
         .put("float64Value", Float.MAX_VALUE+1.0)
 
-        val givenSubRecord2 = Struct(givenSubRecordFieldSchema)
-        .put("int8Value", Byte.MIN_VALUE)
-        .put("int16Value", Short.MIN_VALUE)
-        .put("int32Value", Int.MIN_VALUE)
-        .put("int64Value", Long.MIN_VALUE)
-        .put("stringValue", "xyz")
-        .put("booleanValue", false)
-        .put("float32Value", Float.MIN_VALUE)
-        .put("float64Value", Float.MIN_VALUE-1.0)
-
         val givenRecord = Struct(givenRecordFieldSchema)
         .put("int32Value", Int.MIN_VALUE)
         .put("stringValue", "zzz")
@@ -389,9 +379,92 @@ class JsltTransformTest {
 
     @Test
     fun jsltTransformationIsApplied() {
-        val jsltString = ""
-        configureNonTransformJslt(xformValue)
-        throw NotImplementedError()
+        val jsltString = """
+            let someConst = "constant_value"
+            {
+                "newConstField": ${"$"}someConst,
+                "newConstField2": 1.23,
+                "newNestedField": {
+                    "numberField": .numberField,
+                    "stringField": .stringField
+                },
+                "booleanField": .booleanField,
+                "newArray": [ .inputNestedField.valueA, uppercase(.inputNestedField.valueB) ]
+            }
+        """.trimIndent()
+        configureNonTransformJslt(xformValue, jsltString)
+
+        val givenNestedSchema = SchemaBuilder
+            .struct()
+            .field("valueA", Schema.STRING_SCHEMA)
+            .field("valueB", Schema.STRING_SCHEMA)
+            .field("valueC", Schema.STRING_SCHEMA)
+            .build()
+
+        val givenSchema = SchemaBuilder
+            .struct()
+            .field("stringField", Schema.STRING_SCHEMA)
+            .field("booleanField", Schema.BOOLEAN_SCHEMA)
+            .field("numberField", Schema.INT16_SCHEMA)
+            .field("inputNestedField", givenNestedSchema)
+            .build()
+
+        val givenNestedValue = Struct(givenNestedSchema)
+            .put("valueA", "example_string_a")
+            .put("valueB", "example_string_b")
+            .put("valueC", "example_string_c")
+
+        val givenValue = Struct(givenSchema)
+            .put("stringField", "StringValue")
+            .put("booleanField", true)
+            .put("numberField", 1234.toShort())
+            .put("inputNestedField", givenNestedValue)
+
+        val given = SourceRecord(
+            null,
+            null,
+            "topic",
+            0,
+            null,
+            null,
+            givenSchema,
+            givenValue
+        )
+
+        val expectedNestedSchema = SchemaBuilder
+            .struct()
+            .field("numberField", Schema.INT32_SCHEMA)
+            .field("stringField", Schema.STRING_SCHEMA)
+            .build()
+
+        val expectedSchema = SchemaBuilder
+            .struct()
+            .field("newConstField", Schema.STRING_SCHEMA)
+            .field("newConstField2", Schema.FLOAT64_SCHEMA)
+            .field("newNestedField", expectedNestedSchema)
+            .field("booleanField", Schema.BOOLEAN_SCHEMA)
+            .field("newArray", SchemaBuilder.array(Schema.STRING_SCHEMA))
+            .build()
+
+        val expectedNestedValue = Struct(expectedNestedSchema)
+            .put("numberField", 1234)
+            .put("stringField", "StringValue")
+
+        val expected = Struct(expectedSchema)
+            .put("newConstField", "constant_value")
+            .put("newConstField2", 1.23)
+            .put("newNestedField", expectedNestedValue)
+            .put("booleanField", true)
+            .put("newArray", arrayOf("example_string_a","EXAMPLE_STRING_B").toList())
+
+        val actual: Struct = xformValue.apply(given).value() as Struct
+
+        assertEquals(expected.getString("newConstField"), actual.getString("newConstField"))
+        assertEquals(expected.getFloat64("newConstField2"), actual.getFloat64("newConstField2"))
+        assertEquals(expected.getBoolean("booleanField"), actual.getBoolean("booleanField"))
+        assertEquals(expected.getStruct("newNestedField").getInt32("numberField"), actual.getStruct("newNestedField").getInt32("numberField"))
+        assertEquals(expected.getStruct("newNestedField").getString("stringField"), actual.getStruct("newNestedField").getString("stringField"))
+        assertEquals(expected.getArray<String>("newArray"), actual.getArray<String>("newArray"))
     }
 
 
@@ -420,127 +493,7 @@ class JsltTransformTest {
             )
         }
     }
-//
-//    @Test
-//    fun testNestedStruct() {
-//        configureNonTransformJslt(xformValue)
-//        var builder = SchemaBuilder.struct()
-//        builder.field("int8", Schema.INT8_SCHEMA)
-//        builder.field("int16", Schema.INT16_SCHEMA)
-//        builder.field("int32", Schema.INT32_SCHEMA)
-//        builder.field("int64", Schema.INT64_SCHEMA)
-//        builder.field("float32", Schema.FLOAT32_SCHEMA)
-//        builder.field("float64", Schema.FLOAT64_SCHEMA)
-//        builder.field("boolean", Schema.BOOLEAN_SCHEMA)
-//        builder.field("string", Schema.STRING_SCHEMA)
-//        builder.field("bytes", Schema.BYTES_SCHEMA)
-//        val supportedTypesSchema = builder.build()
-//        builder = SchemaBuilder.struct()
-//        builder.field("B", supportedTypesSchema)
-//        val oneLevelNestedSchema = builder.build()
-//        builder = SchemaBuilder.struct()
-//        builder.field("A", oneLevelNestedSchema)
-//        val twoLevelNestedSchema = builder.build()
-//        val supportedTypes = Struct(supportedTypesSchema)
-//        supportedTypes.put("int8", Byte.MAX_VALUE)
-//        supportedTypes.put("int16", Short.MAX_VALUE)
-//        supportedTypes.put("int32", Int.MAX_VALUE)
-//        supportedTypes.put("int64", Long.MAX_VALUE)
-//        supportedTypes.put("float32", 32f)
-//        supportedTypes.put("float64", 64.0)
-//        supportedTypes.put("boolean", true)
-//        supportedTypes.put("string", "stringy")
-//        supportedTypes.put("bytes", "bytes".toByteArray())
-//        val oneLevelNestedStruct = Struct(oneLevelNestedSchema)
-//        oneLevelNestedStruct.put("B", supportedTypes)
-//        val twoLevelNestedStruct = Struct(twoLevelNestedSchema)
-//        twoLevelNestedStruct.put("A", oneLevelNestedStruct)
-//        val transformed: SourceRecord = xformValue.apply(
-//            SourceRecord(
-//                null, null,
-//                "topic", 0,
-//                twoLevelNestedSchema, twoLevelNestedStruct
-//            )
-//        )
-//        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type())
-//        val transformedStruct = transformed.value() as Struct
-//        val nestedStruct = ((transformed.value() as Struct).get("A") as Struct).get("B") as Struct
-//        println(transformedStruct)
-//        println(nestedStruct.get("bytes").javaClass.name)
-//        assertEquals(9, nestedStruct.schema().fields().size)
-//        assertEquals(Byte.MAX_VALUE.toInt(), nestedStruct.getInt32("int8") as Int)
-//        assertEquals(Short.MAX_VALUE.toInt(), nestedStruct.getInt32("int16"))
-//        assertEquals(Int.MAX_VALUE, nestedStruct.getInt32("int32"))
-//        assertEquals(Long.MAX_VALUE, nestedStruct.get("int64") as Long)
-//        assertEquals(32.0, nestedStruct.getFloat64("float32"), 0.0)
-//        assertEquals(64.0, nestedStruct.getFloat64("float64"), 0.0)
-//        assertEquals(true, nestedStruct.getBoolean("boolean"))
-//        assertEquals("stringy", nestedStruct.getString("string"))
-//        assertEquals(Base64.getEncoder().encodeToString("bytes".toByteArray()), nestedStruct.get("bytes"))
-//    }
-//
-//    @Test
-//    fun testNestedMapWithDelimiter() {
-//        configureNonTransformJslt(xformValue)
-//        val supportedTypes: MutableMap<String, Any> = HashMap()
-//        supportedTypes["int8"] = 8.toByte()
-//        supportedTypes["int16"] = 16.toShort()
-//        supportedTypes["int32"] = 32
-//        supportedTypes["int64"] = 64.toLong()
-//        supportedTypes["float32"] = 32f
-//        supportedTypes["float64"] = 64.0
-//        supportedTypes["boolean"] = true
-//        supportedTypes["string"] = "stringy"
-//        supportedTypes["bytes"] = "bytes".toByteArray()
-//        val oneLevelNestedMap = Collections.singletonMap<String, Any>("B", supportedTypes)
-//        val twoLevelNestedMap = Collections.singletonMap<String, Any>("A", oneLevelNestedMap)
-//        val transformed: SourceRecord = xformValue.apply(
-//            SourceRecord(
-//                null, null,
-//                "topic", 0,
-//                null, twoLevelNestedMap
-//            )
-//        )
-//        assertNull(transformed.valueSchema())
-//        assertTrue(transformed.value() is Map<*, *>)
-//        val transformedMap = transformed.value() as Map<String, Any>
-//        assertEquals(9, transformedMap.size)
-//        assertEquals(8.toByte(), transformedMap["A#B#int8"])
-//        assertEquals(16.toShort(), transformedMap["A#B#int16"])
-//        assertEquals(32, transformedMap["A#B#int32"])
-//        assertEquals(64.toLong(), transformedMap["A#B#int64"])
-//        assertEquals(32f, transformedMap["A#B#float32"] as Float, 0f)
-//        assertEquals(64.0, transformedMap["A#B#float64"] as Double, 0.0)
-//        assertEquals(true, transformedMap["A#B#boolean"])
-//        assertEquals("stringy", transformedMap["A#B#string"])
-//        assertArrayEquals("bytes".toByteArray(), transformedMap["A#B#bytes"] as ByteArray?)
-//    }
-//
-//    @Test
-//    fun testOptionalFieldStruct() {
-//        configureNonTransformJslt(xformValue)
-//        var builder = SchemaBuilder.struct()
-//        builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA)
-//        val supportedTypesSchema = builder.build()
-//        builder = SchemaBuilder.struct()
-//        builder.field("B", supportedTypesSchema)
-//        val oneLevelNestedSchema = builder.build()
-//        val supportedTypes = Struct(supportedTypesSchema)
-//        supportedTypes.put("opt_int32", null)
-//        val oneLevelNestedStruct = Struct(oneLevelNestedSchema)
-//        oneLevelNestedStruct.put("B", supportedTypes)
-//        val transformed: SourceRecord = xformValue.apply(
-//            SourceRecord(
-//                null, null,
-//                "topic", 0,
-//                oneLevelNestedSchema, oneLevelNestedStruct
-//            )
-//        )
-//        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type())
-//        val transformedStruct = transformed.value() as Struct
-//        assertNull(transformedStruct["B.opt_int32"])
-//    }
-//
+
     @Test
     fun testOptionalStruct() {
         configureNonTransformJslt(xformValue)
@@ -557,170 +510,4 @@ class JsltTransformTest {
         assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type())
         assertNull(transformed.value())
     }
-//
-//    @Test
-//    fun testOptionalNestedStruct() {
-//        configureNonTransformJslt(xformValue)
-//        var builder = SchemaBuilder.struct().optional()
-//        builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA)
-//        val supportedTypesSchema = builder.build()
-//        builder = SchemaBuilder.struct()
-//        builder.field("B", supportedTypesSchema)
-//        val oneLevelNestedSchema = builder.build()
-//        val oneLevelNestedStruct = Struct(oneLevelNestedSchema)
-//        oneLevelNestedStruct.put("B", null)
-//        val transformed: SourceRecord = xformValue.apply(
-//            SourceRecord(
-//                null, null,
-//                "topic", 0,
-//                oneLevelNestedSchema, oneLevelNestedStruct
-//            )
-//        )
-//        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type())
-//        val transformedStruct = transformed.value() as Struct
-//        assertNull(transformedStruct["B.opt_int32"])
-//    }
-//
-//    @Test
-//    fun testOptionalFieldMap() {
-//        configureNonTransformJslt(xformValue)
-//        val supportedTypes: MutableMap<String, Any?> = HashMap()
-//        supportedTypes["opt_int32"] = null
-//        val oneLevelNestedMap = Collections.singletonMap<String, Any>("B", supportedTypes)
-//        val transformed: SourceRecord = xformValue.apply(
-//            SourceRecord(
-//                null, null,
-//                "topic", 0,
-//                null, oneLevelNestedMap
-//            )
-//        )
-//        assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type())
-//        val transformedMap = transformed.value() as Struct
-//        assertNull(transformedMap["B.opt_int32"])
-//    }
-//
-
-//
-//    @Test
-//    fun testSchemalessArray() {
-//        configureNonTransformJslt(xformValue)
-//        val value: Any = Collections.singletonMap(
-//            "foo",
-//            Arrays.asList("bar", Collections.singletonMap("baz", Collections.singletonMap("lfg", "lfg")))
-//        )
-//        assertEquals(value, xformValue.apply(SourceRecord(null, null, "topic", null, null, null, value)).value())
-//    }
-//
-//    @Test
-//    fun testArrayWithSchema() {
-//        configureNonTransformJslt(xformValue)
-//        val nestedStructSchema = SchemaBuilder.struct().field("lfg", Schema.STRING_SCHEMA).build()
-//        val innerStructSchema = SchemaBuilder.struct().field("baz", nestedStructSchema).build()
-//        val structSchema = SchemaBuilder.struct()
-//            .field("foo", SchemaBuilder.array(innerStructSchema).doc("durk").build())
-//            .build()
-//        val nestedValue = Struct(nestedStructSchema)
-//        nestedValue.put("lfg", "lfg")
-//        val innerValue = Struct(innerStructSchema)
-//        innerValue.put("baz", nestedValue)
-//        val value = Struct(structSchema)
-//        value.put("foo", listOf(innerValue))
-//        val transformed: SourceRecord =
-//            xformValue.apply(SourceRecord(null, null, "topic", null, null, structSchema, value))
-//        assertEquals(value, transformed.value())
-//        assertEquals(structSchema, transformed.valueSchema())
-//    }
-//
-//    @Test
-//    fun testOptionalAndDefaultValuesNested() {
-//        // If we have a nested structure where an entire sub-Struct is optional, all flattened fields generated from its
-//        // children should also be optional. Similarly, if the parent Struct has a default value, the default value for
-//        // the flattened field
-//        configureNonTransformJslt(xformValue)
-//        val builder = SchemaBuilder.struct().optional()
-//        builder.field("req_field", Schema.STRING_SCHEMA)
-//        builder.field("opt_field", SchemaBuilder.string().optional().defaultValue("child_default").build())
-//        val childDefaultValue = Struct(builder)
-//        childDefaultValue.put("req_field", "req_default")
-//        builder.defaultValue(childDefaultValue)
-//        val schema = builder.build()
-//        // Intentionally leave this entire value empty since it is optional
-//        val value = Struct(schema)
-//        val transformed: SourceRecord = xformValue.apply(SourceRecord(null, null, "topic", 0, schema, value))
-//        assertNotNull(transformed)
-//        val transformedSchema = transformed.valueSchema()
-//        assertEquals(Schema.Type.STRUCT, transformedSchema.type())
-//        assertEquals(2, transformedSchema.fields().size)
-//        // Required field should pick up both being optional and the default value from the parent
-//        val transformedReqFieldSchema = SchemaBuilder.string().optional().defaultValue("req_default").build()
-//        assertEquals(transformedReqFieldSchema, transformedSchema.field("req_field").schema())
-//        // The optional field should still be optional but should have picked up the default value. However, since
-//        // the parent didn't specify the default explicitly, we should still be using the field's normal default
-//        val transformedOptFieldSchema = SchemaBuilder.string().optional().defaultValue("child_default").build()
-//        assertEquals(transformedOptFieldSchema, transformedSchema.field("opt_field").schema())
-//    }
-//
-//    @Test
-//    fun tombstoneEventWithoutSchemaShouldPassThrough() {
-//        configureNonTransformJslt(xformValue)
-//        val record = SourceRecord(
-//            null, null, "test", 0,
-//            null, null
-//        )
-//        val transformedRecord: SourceRecord = xformValue.apply(record)
-//        assertNull(transformedRecord.value())
-//        assertNull(transformedRecord.valueSchema())
-//    }
-//
-//    @Test
-//    fun tombstoneEventWithSchemaShouldPassThrough() {
-//        configureNonTransformJslt(xformValue)
-//        val simpleStructSchema =
-//            SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA)
-//                .build()
-//        val record = SourceRecord(
-//            null, null, "test", 0,
-//            simpleStructSchema, null
-//        )
-//        val transformedRecord: SourceRecord = xformValue.apply(record)
-//        assertNull(transformedRecord.value())
-//        assertEquals(simpleStructSchema, transformedRecord.valueSchema())
-//    }
-//
-//    @Test
-//    fun testMapWithNullFields() {
-//        configureNonTransformJslt(xformValue)
-//
-//        // Use a LinkedHashMap to ensure the SMT sees entries in a specific order
-//        val value: MutableMap<String, Any?> = LinkedHashMap()
-//        value["firstNull"] = null
-//        value["firstNonNull"] = "nonNull"
-//        value["secondNull"] = null
-//        value["secondNonNull"] = "alsoNonNull"
-//        value["thirdNonNull"] = null
-//        val record = SourceRecord(null, null, "test", 0, null, value)
-//        val transformedRecord: SourceRecord = xformValue.apply(record)
-//        assertEquals(value, transformedRecord.value())
-//    }
-//
-//    @Test
-//    fun testStructWithNullFields() {
-//        configureNonTransformJslt(xformValue)
-//        val structSchema = SchemaBuilder.struct()
-//            .field("firstNull", Schema.OPTIONAL_STRING_SCHEMA)
-//            .field("firstNonNull", Schema.OPTIONAL_STRING_SCHEMA)
-//            .field("secondNull", Schema.OPTIONAL_STRING_SCHEMA)
-//            .field("secondNonNull", Schema.OPTIONAL_STRING_SCHEMA)
-//            .field("thirdNonNull", Schema.OPTIONAL_STRING_SCHEMA)
-//            .build()
-//        val value = Struct(structSchema)
-//        value.put("firstNull", null)
-//        value.put("firstNonNull", "nonNull")
-//        value.put("secondNull", null)
-//        value.put("secondNonNull", "alsoNonNull")
-//        value.put("thirdNonNull", null)
-//        val record = SourceRecord(null, null, "test", 0, structSchema, value)
-//        val transformedRecord: SourceRecord = xformValue.apply(record)
-//        assertEquals(value, transformedRecord.value())
-//    }
 }

@@ -21,15 +21,15 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig
 import java.util.Collections.singletonMap
 
 
-abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
+abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
     companion object {
         val OVERVIEW_DOC =
-            ("Flatten a nested data structure, generating names for each field by concatenating the field names at each "
-                    + "level with a configurable delimiter character. Applies to Struct when schema present, or a Map "
-                    + "in the case of schemaless data. Array fields and their contents are not modified. The default delimiter is '.'."
+            ("Transform a structured record using the JSLT library. See https://github.com/schibsted/jslt."
+                    + "NOTE: JSLT is working with JsonNode objects, which means that any field is converted and the resulting field might not be of the exact same type as the input field!" +
+                    ""
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key::class.java.name + "</code>) "
                     + "or value (<code>" + Value::class.java.name + "</code>).")
-        private val JSLT_CONFIG = "jslt"
+        private const val JSLT_CONFIG = "jslt"
         val CONFIG_DEF: ConfigDef = ConfigDef()
             .define(
                 JSLT_CONFIG,
@@ -94,18 +94,14 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
 
 
     private fun applyWithSchema(record: R): R {
-        val value = Requirements.requireStructOrNull(operatingValue(record), PURPOSE)
+        val value = Requirements.requireStruct(operatingValue(record), PURPOSE)
         val schema = operatingSchema(record)
         val topic = record?.topic()
 
-        return if (value == null) {
-            newRecord(record, schema, null)
-        } else {
-            val valueAsJsonBytes = jsonConverter.fromConnectData(topic, schema, value)
-            val inputValueJsonNode = objectMapper.readTree(valueAsJsonBytes)
-            val outputValue = convert(inputValueJsonNode)
-            newRecord(record, outputValue?.schema(), outputValue)
-        }
+        val valueAsJsonBytes = jsonConverter.fromConnectData(topic, schema, value)
+        val inputValueJsonNode = objectMapper.readTree(valueAsJsonBytes)
+        val outputValue = convert(inputValueJsonNode)
+        return newRecord(record, outputValue?.schema(), outputValue)
     }
 
     private fun convert(inputValueJsonNode: JsonNode): Struct? {
@@ -145,7 +141,7 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
     }
 
     private fun convertJsonNodeToValue(jsonNode: JsonNode, schema: Schema? = null): Any? {
-        return when (jsonNode.nodeType) {
+        return when (jsonNode.nodeType!!) {
             JsonNodeType.ARRAY -> {
                 if (jsonNode.elements().hasNext()) {
                     jsonNode.elements().asSequence().map { elem ->
@@ -225,7 +221,7 @@ abstract class JsltTransform<R : ConnectRecord<R>?>() : Transformation<R> {
                 jsonNode.isFloat -> Schema.OPTIONAL_FLOAT32_SCHEMA
                 jsonNode.isDouble -> Schema.OPTIONAL_FLOAT64_SCHEMA
                 jsonNode.isBigDecimal -> Schema.OPTIONAL_STRING_SCHEMA
-                else -> throw DataException("Unsupported numerical type for ${jsonNode}")
+                else -> throw DataException("Unsupported numerical type for $jsonNode")
             }
             JsonNodeType.MISSING -> Schema.OPTIONAL_STRING_SCHEMA
             else -> throw DataException("The type ${jsonNode.nodeType} is not a primitive!")
