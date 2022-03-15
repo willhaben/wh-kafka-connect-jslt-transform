@@ -5,9 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.JsonNodeType
 import com.schibsted.spt.data.jslt.Expression
 import com.schibsted.spt.data.jslt.Parser
-import org.apache.kafka.common.cache.Cache
-import org.apache.kafka.common.cache.LRUCache
-import org.apache.kafka.common.cache.SynchronizedCache
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.connect.connector.ConnectRecord
 import org.apache.kafka.connect.data.Schema
@@ -45,13 +42,11 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
 
     private lateinit var jslt: String
     private lateinit var jsltExpression: Expression
-    private var schemaUpdateCache: Cache<Schema?, Schema?>? = null
 
     override fun configure(props: Map<String?, *>?) {
         val config = SimpleConfig(CONFIG_DEF, props)
         jslt = config.getString(JSLT_CONFIG)
         jsltExpression = Parser.compileString(jslt)
-        schemaUpdateCache = SynchronizedCache(LRUCache(16))
     }
 
     override fun apply(record: R): R {
