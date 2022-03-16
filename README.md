@@ -29,6 +29,15 @@ See the [Confluent Kafka Connect Plugins Userguide](https://docs.confluent.io/ho
 The transformer expects the `jslt` attribute in the connector config JSON. This attribute is a string with a valid JSLT
 expression.
 
+```json
+{
+  ...,
+  "transforms": "jsltTransform",
+  "transforms.jsltTransform.type": "at.willhaben.kafka.connect.transforms.jslt.JsltTransform$Value",
+  "transforms.jsltTransform.jslt": "{ . }"
+}
+```
+
 > Note that the transformer only supports some kind of structured input. So make sure that there is a [converter](https://www.confluent.io/blog/kafka-connect-deep-dive-converters-serialization-explained/) class (e.g. [AvroConverter](https://www.confluent.io/hub/confluentinc/kafka-connect-avro-converter), [JsonConverter](https://www.confluent.io/hub/confluentinc/kafka-connect-json-schema-converter)) like `"value.converter": "io.confluent.connect.avro.AvroConverter"` that provides the data in a structured format.
 
 The following links are helpful to learn more about JSLT:
