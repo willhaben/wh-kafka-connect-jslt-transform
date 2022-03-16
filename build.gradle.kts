@@ -8,6 +8,13 @@ version = System.getenv("VERSION") ?: "1.0.0"
 
 val javaVersion = 11
 
+val artifactoryContext =
+    project.properties.getOrDefault("artifactory_context", System.getenv("ARTIFACTORY_CONTEXT")).toString()
+val artifactoryUsern =
+    project.properties.getOrDefault("artifactory_user", System.getenv("ARTIFACTORY_USER")).toString()
+val artifactoryPassword =
+    project.properties.getOrDefault("artifactory_password", System.getenv("ARTIFACTORY_PWD")).toString()
+
 
 plugins {
     kotlin("jvm") version "1.6.10"
@@ -21,19 +28,21 @@ repositories {
     mavenCentral()
 }
 
+val includeInJar by configurations.creating
+
 dependencies {
-    val kafkaConnectVersion = "3.1.0"
+    val kafkaConnectVersion = "3.+"
     val jsltLibVersion = "0.1.11"
     val junitVersion = "5.8.2"
 
-    implementation(platform("org.jetbrains.kotlin:kotlin-bom")) // Align versions of all Kotlin components
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8") // Use the Kotlin JDK 8 standard library.
+    compileOnly(platform("org.jetbrains.kotlin:kotlin-bom")) // Align versions of all Kotlin components
+    compileOnly("org.jetbrains.kotlin:kotlin-stdlib-jdk8") // Use the Kotlin JDK 8 standard library.
 
     implementation("org.apache.kafka:connect-api:$kafkaConnectVersion")
     implementation("org.apache.kafka:connect-json:$kafkaConnectVersion")
     implementation("org.apache.kafka:connect-transforms:$kafkaConnectVersion")
     implementation("com.schibsted.spt.data:jslt:$jsltLibVersion")
-
+    includeInJar("com.schibsted.spt.data:jslt:$jsltLibVersion") // explicitly include this file in the build step
 
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
@@ -46,7 +55,6 @@ kotlin {
     }
 }
 
-
 tasks.jar {
     manifest {
         attributes(
@@ -56,6 +64,7 @@ tasks.jar {
             )
         )
     }
+    from(includeInJar.asFileTree.files)
 }
 
 
@@ -72,10 +81,10 @@ publishing {
     repositories {
         maven {
             name = "ArtifactoryLocal"
-            url = uri(project.properties.getOrDefault("artifactory_context", System.getenv("ARTIFACTORY_CONTEXT")).toString() + "/libs-release-local")
+            url = uri(artifactoryContext + "/libs-release-local")
             credentials {
-                username = project.properties.getOrDefault("artifactory_user", System.getenv("ARTIFACTORY_USER")).toString()
-                password = project.properties.getOrDefault("artifactory_password", System.getenv("ARTIFACTORY_PWD")).toString()
+                username = artifactoryUsern
+                password = artifactoryPassword
             }
         }
     }

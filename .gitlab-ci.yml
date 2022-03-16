@@ -6,8 +6,8 @@ workflow:
 
 variables:
   # VERSION env-var is referenced in build.gradle.kts  to set the version of the jar artifact
-  VERSION: "${CI_PIPELINE_IID}-${CI_COMMIT_SHORT_SHA}"
-  JAR_NAME: "wh-kafka-connect-jslt-transform-${CI_PIPELINE_IID}-${CI_COMMIT_SHORT_SHA}.jar"
+  VERSION: "1.0.${CI_PIPELINE_IID}"
+  JAR_NAME: "wh-kafka-connect-jslt-transform-${VERSION}.jar"
 
 
 build-lib:
