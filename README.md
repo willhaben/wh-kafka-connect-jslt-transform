@@ -47,7 +47,7 @@ The following JSLT takes a nested structure as input and
 * adds a new constant field `producer_team`
 * maps the values of the field `customer_status` from a numeric representation to a code, using custom logic
 * pseudonymizes the `customer_id` field
-* adds a list of objects field `adresses` based on the separate invoice/delivery address fields of the input
+* adds a list of objects field `locations` based on the separate invoice/delivery address fields of the input
 * extracts and flattens the two attributes `customer_type` and `customer_class`
 
 **Input Record**
@@ -95,7 +95,8 @@ The following JSLT takes a nested structure as input and
     }
   ],
   "customer_type": .attributes.customer_type,
-  "customer_class": .attributes.customer_class
+  "customer_class": .attributes.customer_class,
+  "producer_team": "us.california.burbank.disney"
 }
 ```
 
@@ -103,17 +104,21 @@ The following JSLT takes a nested structure as input and
 
 ```json
 {
-  "customer_id" : "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
-  "customer_status_code" : "INACTIVE",
-  "locations" : [ {
-    "zip_code" : "1312",
-    "city" : "Duckburg"
-  }, {
-    "zip_code" : "1313",
-    "city" : "Duckburg"
-  } ],
-  "customer_type" : "C2C",
-  "customer_class" : "A"
+  "customer_id": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+  "customer_status_code": "INACTIVE",
+  "locations": [
+    {
+      "zip_code": "1312",
+      "city": "Duckburg"
+    },
+    {
+      "zip_code": "1313",
+      "city": "Duckburg"
+    }
+  ],
+  "customer_type": "C2C",
+  "customer_class": "A",
+  "producer_team": "us.california.burbank.disney"
 }
 ```
 
