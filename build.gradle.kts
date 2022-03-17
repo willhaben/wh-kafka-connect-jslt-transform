@@ -28,7 +28,9 @@ repositories {
     mavenCentral()
 }
 
-val includeInJar by configurations.creating
+val includeInJar by configurations.creating {
+    isTransitive = false
+}
 
 dependencies {
     val kafkaConnectVersion = "3.+"
@@ -64,7 +66,7 @@ tasks.jar {
             )
         )
     }
-    from(includeInJar.asFileTree.files)
+    from(zipTree(includeInJar.singleFile))
 }
 
 
