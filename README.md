@@ -26,15 +26,19 @@ See the [Confluent Kafka Connect Plugins Userguide](https://docs.confluent.io/ho
 
 ### Connector Configuration
 
-The transformer expects the `jslt` attribute in the connector config JSON. This attribute is a string with a valid JSLT
-expression.
+The transformer expects the `jslt` attribute in the connector config JSON. 
+In the following example the dot means it will to perform any transformation but this string can be any valid JSLT expression.
+> Note that Json does not support multiline strings. So linebreaks and quotes must be escaped with a backslash (e.g. `"` -> `\"`) 
 
 ```json
 {
-  ...,
-  "transforms": "jsltTransform",
-  "transforms.jsltTransform.type": "at.willhaben.kafka.connect.transforms.jslt.JsltTransform$Value",
-  "transforms.jsltTransform.jslt": "{ . }"
+  "name": ...,
+  "config": {
+    ...,
+    "transforms": "jsltTransform",
+    "transforms.jsltTransform.type": "at.willhaben.kafka.connect.transforms.jslt.JsltTransform$Value",
+    "transforms.jsltTransform.jslt": "."
+  }
 }
 ```
 
