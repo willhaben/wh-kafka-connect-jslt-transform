@@ -7,10 +7,9 @@ to offer transformation capabilities using the Schibsted [JSLT library](https://
 
 The library uses Gradle to build the JAR.
 
-1. Install [Gradle](https://gradle.org/) as described in
-   the [Gradle Installation Guide](https://docs.gradle.org/current/userguide/installation.html).
+1. Install latest Java SDK.
 2. Checkout the Git repository and change to its root folder.
-3. Execute `gradle build`
+3. Execute `./gradlew build`
 
 The JAR can then be found in the `build/libs/` subfolder.
 

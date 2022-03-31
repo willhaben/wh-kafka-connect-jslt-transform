@@ -24,7 +24,6 @@ plugins {
 }
 
 repositories {
-    mavenLocal()
     mavenCentral()
 }
 
@@ -76,6 +75,37 @@ publishing {
             groupId = project.group.toString()
             artifactId = project.name
             version = project.version.toString()
+
+            pom {
+                name.set( "wh-kafka-connect-jslt-transform")
+                description.set( project.description)
+                url.set("https://github.com/willhaben/wh-kafka-connect-jslt-transform")
+                organization {
+                    name.set("willhaben")
+                    url.set("https://github.com/willhaben/")
+                }
+                issueManagement {
+                    system.set("GitHub")
+                    url.set("https://github.com/willhaben/wh-kafka-connect-jslt-transform/issues")
+                }
+                licenses {
+                    license {
+                        name.set( "Apache License 2.0")
+                        url.set("https://github.com/willhaben/wh-kafka-connect-jslt-transform/blob/master/LICENSE")
+                        distribution.set("repo")
+                    }
+                }
+                developers {
+                    developer {
+                        name.set("willhaben")
+                    }
+                }
+                scm {
+                    url.set("https://github.com/willhaben/wh-kafka-connect-jslt-transform")
+                    connection.set("scm:git:git://github.com/willhaben/wh-kafka-connect-jslt-transform.git")
+                    developerConnection.set("scm:git:ssh://git@github.com:willhaben/wh-kafka-connect-jslt-transform.git")
+                }
+            }
 
             from(components["java"])
         }
