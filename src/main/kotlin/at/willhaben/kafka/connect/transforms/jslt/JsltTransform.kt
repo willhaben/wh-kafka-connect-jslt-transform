@@ -18,14 +18,18 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig
 import java.util.Collections.singletonMap
 
 
+@Suppress("TooManyFunctions")
 abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
     companion object {
         val OVERVIEW_DOC =
-            ("Transform a structured record using the JSLT library. See https://github.com/schibsted/jslt."
-                    + "NOTE: JSLT is working with JsonNode objects, which means that any field is converted and the resulting field might not be of the exact same type as the input field!" +
-                    ""
-                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key::class.java.name + "</code>) "
-                    + "or value (<code>" + Value::class.java.name + "</code>).")
+            ("Transform a structured record using the JSLT library. See https://github.com/schibsted/jslt." +
+                    "NOTE: JSLT is working with JsonNode objects, " +
+                    "which means that any field is converted and the resulting field " +
+                    "might not be of the exact same type as the input field!" +
+                    "" +
+                    "<p/>Use the concrete transformation type designed for " +
+                    "the record key (<code>" + Key::class.java.name + "</code>) " +
+                    "or value (<code>" + Value::class.java.name + "</code>).")
         private const val JSLT_CONFIG = "jslt"
         val CONFIG_DEF: ConfigDef = ConfigDef()
             .define(
@@ -65,7 +69,9 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
         }
     }
 
-    override fun close() {}
+    @Suppress("EmptyFunctionBlock")
+    override fun close() {
+    }
 
     override fun config(): ConfigDef {
         return CONFIG_DEF
@@ -150,18 +156,7 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
             JsonNodeType.BOOLEAN -> jsonNode.booleanValue()
             JsonNodeType.MISSING -> null
             JsonNodeType.NULL -> null
-            JsonNodeType.NUMBER -> {
-                when {
-                    jsonNode.isFloat -> jsonNode.floatValue()
-                    jsonNode.isDouble -> jsonNode.doubleValue()
-                    jsonNode.isBigDecimal -> jsonNode.decimalValue().toPlainString()
-                    jsonNode.isShort -> jsonNode.shortValue()
-                    jsonNode.isInt -> jsonNode.intValue()
-                    jsonNode.isLong -> jsonNode.longValue()
-                    jsonNode.isBigInteger -> jsonNode.bigIntegerValue()
-                    else -> if (jsonNode.isFloatingPointNumber) jsonNode.doubleValue() else jsonNode.asLong()
-                }
-            }
+            JsonNodeType.NUMBER -> getNumberValue(jsonNode)
             JsonNodeType.POJO, JsonNodeType.OBJECT -> {
                 val subStruct = Struct(schema)
                 jsonNode.fields().forEach { (key, field) ->
@@ -170,6 +165,19 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
                 subStruct
             }
             JsonNodeType.STRING -> jsonNode.textValue()
+        }
+    }
+
+    private fun getNumberValue(jsonNode: JsonNode): Any? {
+        return when {
+            jsonNode.isFloat -> jsonNode.floatValue()
+            jsonNode.isDouble -> jsonNode.doubleValue()
+            jsonNode.isBigDecimal -> jsonNode.decimalValue().toPlainString()
+            jsonNode.isShort -> jsonNode.shortValue()
+            jsonNode.isInt -> jsonNode.intValue()
+            jsonNode.isLong -> jsonNode.longValue()
+            jsonNode.isBigInteger -> jsonNode.bigIntegerValue()
+            else -> if (jsonNode.isFloatingPointNumber) jsonNode.doubleValue() else jsonNode.asLong()
         }
     }
 
@@ -208,21 +216,21 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
             JsonNodeType.BOOLEAN -> Schema.OPTIONAL_BOOLEAN_SCHEMA
             JsonNodeType.STRING -> Schema.OPTIONAL_STRING_SCHEMA
             JsonNodeType.NULL -> Schema.OPTIONAL_STRING_SCHEMA
-            JsonNodeType.NUMBER -> when {
-                jsonNode.isShort -> Schema.OPTIONAL_INT16_SCHEMA
-                jsonNode.isInt -> Schema.OPTIONAL_INT32_SCHEMA
-                jsonNode.isLong -> Schema.OPTIONAL_INT64_SCHEMA
-                jsonNode.isBigInteger -> Schema.OPTIONAL_STRING_SCHEMA
-                jsonNode.isFloat -> Schema.OPTIONAL_FLOAT32_SCHEMA
-                jsonNode.isDouble -> Schema.OPTIONAL_FLOAT64_SCHEMA
-                jsonNode.isBigDecimal -> Schema.OPTIONAL_STRING_SCHEMA
-                else -> throw DataException("Unsupported numerical type for $jsonNode")
-            }
+            JsonNodeType.NUMBER -> getNumberSchema(jsonNode)
             JsonNodeType.MISSING -> Schema.OPTIONAL_STRING_SCHEMA
             else -> throw DataException("The type ${jsonNode.nodeType} is not a primitive!")
         }
+    }
 
-
+    private fun getNumberSchema(jsonNode: JsonNode) = when {
+        jsonNode.isShort -> Schema.OPTIONAL_INT16_SCHEMA
+        jsonNode.isInt -> Schema.OPTIONAL_INT32_SCHEMA
+        jsonNode.isLong -> Schema.OPTIONAL_INT64_SCHEMA
+        jsonNode.isBigInteger -> Schema.OPTIONAL_STRING_SCHEMA
+        jsonNode.isFloat -> Schema.OPTIONAL_FLOAT32_SCHEMA
+        jsonNode.isDouble -> Schema.OPTIONAL_FLOAT64_SCHEMA
+        jsonNode.isBigDecimal -> Schema.OPTIONAL_STRING_SCHEMA
+        else -> throw DataException("Unsupported numerical type for $jsonNode")
     }
 
 

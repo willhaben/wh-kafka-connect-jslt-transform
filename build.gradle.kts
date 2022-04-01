@@ -21,6 +21,7 @@ plugins {
     idea // Generates files that are used by IntelliJ IDEA, thus making it possible to open the project from IDEA
     `java-library` // Apply the java-library plugin for API and implementation separation.
     `maven-publish`
+    id("io.gitlab.arturbosch.detekt") version "1.20.0-RC2"
 }
 
 repositories {

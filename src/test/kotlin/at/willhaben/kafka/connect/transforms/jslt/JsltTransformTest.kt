@@ -9,7 +9,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import java.util.*
-import kotlin.collections.HashMap
 import kotlin.test.Test
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -66,6 +65,7 @@ class JsltTransformTest {
     }
 
     @Test
+    @Suppress("LongMethod")
     fun handlesSchemalessValue() {
         configureNonTransformJslt(xformValue)
         val given = SourceRecord(
@@ -85,7 +85,7 @@ class JsltTransformTest {
                 "arrayField" to arrayOf("ElemA", "ElemB", "ElemC"),
                 "bytes" to "byteArray".toByteArray()
             )
-            )
+        )
 
         val recordFieldSchema = SchemaBuilder
             .struct()
@@ -94,36 +94,42 @@ class JsltTransformTest {
             .build()
 
         val expectedSchema = SchemaBuilder
-                    .struct()
-        .field("numberField", Schema.INT32_SCHEMA)
-        .field("floatField", Schema.FLOAT32_SCHEMA)
-        .field("stringField", Schema.STRING_SCHEMA)
+            .struct()
+            .field("numberField", Schema.INT32_SCHEMA)
+            .field("floatField", Schema.FLOAT32_SCHEMA)
+            .field("stringField", Schema.STRING_SCHEMA)
             .field("booleanField", Schema.BOOLEAN_SCHEMA)
-        .field("recordField", recordFieldSchema)
+            .field("recordField", recordFieldSchema)
             .field("arrayField", SchemaBuilder.array(Schema.STRING_SCHEMA))
             .field("bytes", Schema.BYTES_SCHEMA)
-        .build()
+            .build()
 
         val expectedRecordField = Struct(recordFieldSchema)
         expectedRecordField.put("valueA", 123456)
         expectedRecordField.put("valueB", "xxx")
 
         val expected = Struct(expectedSchema)
-        .put("numberField", Int.MAX_VALUE)
-        .put("floatField", Float.MAX_VALUE)
-        .put("stringField", "someString")
-        .put("booleanField", true)
-        .put("recordField", expectedRecordField)
-        .put("arrayField", arrayOf("ElemA", "ElemB", "ElemC").toList())
-        .put("bytes", "byteArray".toByteArray())
+            .put("numberField", Int.MAX_VALUE)
+            .put("floatField", Float.MAX_VALUE)
+            .put("stringField", "someString")
+            .put("booleanField", true)
+            .put("recordField", expectedRecordField)
+            .put("arrayField", arrayOf("ElemA", "ElemB", "ElemC").toList())
+            .put("bytes", "byteArray".toByteArray())
 
         val actual: Struct = xformValue.apply(given).value() as Struct
         assertEquals(expected.getInt32("numberField"), actual.getInt32("numberField"))
         assertEquals(expected.getFloat32("floatField"), actual.getFloat32("floatField"))
         assertEquals(expected.getString("stringField"), actual.getString("stringField"))
         assertEquals(expected.getBoolean("booleanField"), actual.getBoolean("booleanField"))
-        assertEquals(expected.getStruct("recordField").getInt32("valueA"), actual.getStruct("recordField").getInt32("valueA"))
-        assertEquals(expected.getStruct("recordField").getString("valueB"), actual.getStruct("recordField").getString("valueB"))
+        assertEquals(
+            expected.getStruct("recordField").getInt32("valueA"),
+            actual.getStruct("recordField").getInt32("valueA")
+        )
+        assertEquals(
+            expected.getStruct("recordField").getString("valueB"),
+            actual.getStruct("recordField").getString("valueB")
+        )
         assertEquals(expected.getArray<String>("arrayField"), actual.getArray<String>("arrayField"))
         assertEquals(expected.getBytes("bytes").toList(), actual.getBytes("bytes").toList())
     }
@@ -157,6 +163,7 @@ class JsltTransformTest {
     }
 
     @Test
+    @Suppress("LongMethod")
     fun convertsAllStructuredDataTypes() {
         configureNonTransformJslt(xformValue)
 
@@ -197,27 +204,27 @@ class JsltTransformTest {
             .build()
 
         val givenSubRecord = Struct(givenSubRecordFieldSchema)
-        .put("int8Value", Byte.MAX_VALUE)
-        .put("int16Value", Short.MAX_VALUE)
-        .put("int32Value", Int.MAX_VALUE)
-        .put("int64Value", Long.MAX_VALUE)
-        .put("stringValue", "xxx")
-        .put("booleanValue", true)
-        .put("float32Value", Float.MAX_VALUE)
-        .put("float64Value", Float.MAX_VALUE+1.0)
+            .put("int8Value", Byte.MAX_VALUE)
+            .put("int16Value", Short.MAX_VALUE)
+            .put("int32Value", Int.MAX_VALUE)
+            .put("int64Value", Long.MAX_VALUE)
+            .put("stringValue", "xxx")
+            .put("booleanValue", true)
+            .put("float32Value", Float.MAX_VALUE)
+            .put("float64Value", Float.MAX_VALUE + 1.0)
 
         val givenRecord = Struct(givenRecordFieldSchema)
-        .put("int32Value", Int.MIN_VALUE)
-        .put("stringValue", "zzz")
-        .put("subRecord", givenSubRecord)
+            .put("int32Value", Int.MIN_VALUE)
+            .put("stringValue", "zzz")
+            .put("subRecord", givenSubRecord)
 
         val givenArrayRecord1 = Struct(givenRecordFieldSchema)
-        .put("int32Value", Int.MAX_VALUE)
-        .put("stringValue", "yyy")
+            .put("int32Value", Int.MAX_VALUE)
+            .put("stringValue", "yyy")
 
         val givenArrayRecord2 = Struct(givenRecordFieldSchema)
-        .put("int32Value", Int.MIN_VALUE)
-        .put("stringValue", "abc")
+            .put("int32Value", Int.MIN_VALUE)
+            .put("stringValue", "abc")
 
         val givenArrayRecord3 = Struct(givenRecordFieldSchema)
             .put("int32Value", 987)
@@ -234,7 +241,13 @@ class JsltTransformTest {
             .put("float64", 4.56)
             .put("nullField", null)
             .put("recordField", givenRecord)
-            .put("arrayOfRecordArray", arrayOf(arrayOf(givenArrayRecord1, givenArrayRecord2).toList(), arrayOf(givenArrayRecord3).toList()).toList())
+            .put(
+                "arrayOfRecordArray",
+                arrayOf(
+                    arrayOf(givenArrayRecord1, givenArrayRecord2).toList(),
+                    arrayOf(givenArrayRecord3).toList()
+                ).toList()
+            )
             .put("bytes", "ExampleBytes".toByteArray())
 
         val given = SourceRecord(
@@ -291,7 +304,7 @@ class JsltTransformTest {
             .put("stringValue", "xxx")
             .put("booleanValue", true)
             .put("float32Value", Float.MAX_VALUE)
-            .put("float64Value", Float.MAX_VALUE+1.0)
+            .put("float64Value", Float.MAX_VALUE + 1.0)
 
         val expectedSubRecord2 = Struct(expectedSubRecordFieldSchema)
             .put("int8Value", Byte.MIN_VALUE)
@@ -301,7 +314,7 @@ class JsltTransformTest {
             .put("stringValue", "xyz")
             .put("booleanValue", false)
             .put("float32Value", Float.MIN_VALUE)
-            .put("float64Value", Float.MIN_VALUE-1.0)
+            .put("float64Value", Float.MIN_VALUE - 1.0)
 
         val expectedRecord = Struct(expectedRecordFieldSchema)
             .put("int32Value", Int.MIN_VALUE)
@@ -333,7 +346,13 @@ class JsltTransformTest {
             .put("float32", 1.23f)
             .put("float64", 4.56)
             .put("recordField", expectedRecord)
-            .put("arrayOfRecordArray", arrayOf(arrayOf(expectedArrayRecord1, expectedArrayRecord2).toList(), arrayOf(expectedArrayRecord3).toList()).toList())
+            .put(
+                "arrayOfRecordArray",
+                arrayOf(
+                    arrayOf(expectedArrayRecord1, expectedArrayRecord2).toList(),
+                    arrayOf(expectedArrayRecord3).toList()
+                ).toList()
+            )
             .put("bytes", "ExampleBytes".toByteArray())
 
 
@@ -344,22 +363,56 @@ class JsltTransformTest {
         assertEquals(expected.getInt16("int16").toShort(), actual.getInt32("int16").toShort())
         assertEquals(expected.getInt32("int32"), actual.getInt32("int32"))
         assertEquals(expected.getInt64("int64").toLong(), actual.getInt32("int64").toLong())
-        assertEquals(expected.getFloat32("float32").toDouble(), actual.getFloat64("float32"), 0.0001)
+        assertEquals(
+            expected.getFloat32("float32").toDouble(),
+            actual.getFloat64("float32"), 0.0001
+        )
         assertEquals(expected.getFloat64("float64"), actual.getFloat64("float64"), 0.0001)
         assertEquals(expected.getString("nullField"), actual.getString("nullField"))
 
         val actualRecordField = actual.getStruct("recordField")
-        assertEquals(expectedRecord.getInt32("int32Value"), actualRecordField.getInt32("int32Value"))
-        assertEquals(expectedRecord.getString("stringValue"), actualRecordField.getString("stringValue"))
+        assertEquals(
+            expectedRecord.getInt32("int32Value"),
+            actualRecordField.getInt32("int32Value")
+        )
+        assertEquals(
+            expectedRecord.getString("stringValue"),
+            actualRecordField.getString("stringValue")
+        )
         val actualSubRecordField = actualRecordField.getStruct("subRecord")
-        assertEquals(expectedSubRecord.getInt8("int8Value").toInt(), actualSubRecordField.getInt32("int8Value"))
-        assertEquals(expectedSubRecord.getInt16("int16Value").toInt(), actualSubRecordField.getInt32("int16Value"))
-        assertEquals(expectedSubRecord.getInt32("int32Value"), actualSubRecordField.getInt32("int32Value"))
-        assertEquals(expectedSubRecord.getInt64("int64Value"), actualSubRecordField.getInt64("int64Value"))
-        assertEquals(expectedSubRecord.getString("stringValue"), actualSubRecordField.getString("stringValue"))
-        assertEquals(expectedSubRecord.getBoolean("booleanValue"), actualSubRecordField.getBoolean("booleanValue"))
-        assertEquals(expectedSubRecord.getFloat32("float32Value").toString(), actualSubRecordField.getFloat64("float32Value").toString())
-        assertEquals(expectedSubRecord.getFloat64("float64Value"), actualSubRecordField.getFloat64("float64Value"), 0.001)
+        assertEquals(
+            expectedSubRecord.getInt8("int8Value").toInt(),
+            actualSubRecordField.getInt32("int8Value")
+        )
+        assertEquals(
+            expectedSubRecord.getInt16("int16Value").toInt(),
+            actualSubRecordField.getInt32("int16Value")
+        )
+        assertEquals(
+            expectedSubRecord.getInt32("int32Value"),
+            actualSubRecordField.getInt32("int32Value")
+        )
+        assertEquals(
+            expectedSubRecord.getInt64("int64Value"),
+            actualSubRecordField.getInt64("int64Value")
+        )
+        assertEquals(
+            expectedSubRecord.getString("stringValue"),
+            actualSubRecordField.getString("stringValue")
+        )
+        assertEquals(
+            expectedSubRecord.getBoolean("booleanValue"),
+            actualSubRecordField.getBoolean("booleanValue")
+        )
+        assertEquals(
+            expectedSubRecord.getFloat32("float32Value").toString(),
+            actualSubRecordField.getFloat64("float32Value").toString()
+        )
+        assertEquals(
+            expectedSubRecord.getFloat64("float64Value"),
+            actualSubRecordField.getFloat64("float64Value"),
+            0.001
+        )
 
         val actualArrayOfRecordArray = actual.getArray<List<Struct>>("arrayOfRecordArray")
         assertEquals(2, actualArrayOfRecordArray.size)
@@ -368,16 +421,35 @@ class JsltTransformTest {
         val actualArrayOfRecordArrayItem1 = actualArrayOfRecordArray[0][0]
         val actualArrayOfRecordArrayItem2 = actualArrayOfRecordArray[0][1]
         val actualArrayOfRecordArrayItem3 = actualArrayOfRecordArray[1][0]
-        assertEquals(expectedArrayRecord1.getInt32("int32Value"), actualArrayOfRecordArrayItem1.getInt32("int32Value"))
-        assertEquals(expectedArrayRecord1.getString("stringValue"), actualArrayOfRecordArrayItem1.getString("stringValue"))
-        assertEquals(expectedArrayRecord2.getInt32("int32Value"), actualArrayOfRecordArrayItem2.getInt32("int32Value"))
-        assertEquals(expectedArrayRecord2.getString("stringValue"), actualArrayOfRecordArrayItem2.getString("stringValue"))
-        assertEquals(expectedArrayRecord3.getInt32("int32Value"), actualArrayOfRecordArrayItem3.getInt32("int32Value"))
-        assertEquals(expectedArrayRecord3.getString("stringValue"), actualArrayOfRecordArrayItem3.getString("stringValue"))
+        assertEquals(
+            expectedArrayRecord1.getInt32("int32Value"),
+            actualArrayOfRecordArrayItem1.getInt32("int32Value")
+        )
+        assertEquals(
+            expectedArrayRecord1.getString("stringValue"),
+            actualArrayOfRecordArrayItem1.getString("stringValue")
+        )
+        assertEquals(
+            expectedArrayRecord2.getInt32("int32Value"),
+            actualArrayOfRecordArrayItem2.getInt32("int32Value")
+        )
+        assertEquals(
+            expectedArrayRecord2.getString("stringValue"),
+            actualArrayOfRecordArrayItem2.getString("stringValue")
+        )
+        assertEquals(
+            expectedArrayRecord3.getInt32("int32Value"),
+            actualArrayOfRecordArrayItem3.getInt32("int32Value")
+        )
+        assertEquals(
+            expectedArrayRecord3.getString("stringValue"),
+            actualArrayOfRecordArrayItem3.getString("stringValue")
+        )
 
     }
 
     @Test
+    @Suppress("LongMethod")
     fun jsltTransformationIsApplied() {
         val jsltString = """
             let someConst = "constant_value"
@@ -455,15 +527,21 @@ class JsltTransformTest {
             .put("newConstField2", 1.23)
             .put("newNestedField", expectedNestedValue)
             .put("booleanField", true)
-            .put("newArray", arrayOf("example_string_a","EXAMPLE_STRING_B").toList())
+            .put("newArray", arrayOf("example_string_a", "EXAMPLE_STRING_B").toList())
 
         val actual: Struct = xformValue.apply(given).value() as Struct
 
         assertEquals(expected.getString("newConstField"), actual.getString("newConstField"))
         assertEquals(expected.getFloat64("newConstField2"), actual.getFloat64("newConstField2"))
         assertEquals(expected.getBoolean("booleanField"), actual.getBoolean("booleanField"))
-        assertEquals(expected.getStruct("newNestedField").getInt32("numberField"), actual.getStruct("newNestedField").getInt32("numberField"))
-        assertEquals(expected.getStruct("newNestedField").getString("stringField"), actual.getStruct("newNestedField").getString("stringField"))
+        assertEquals(
+            expected.getStruct("newNestedField").getInt32("numberField"),
+            actual.getStruct("newNestedField").getInt32("numberField")
+        )
+        assertEquals(
+            expected.getStruct("newNestedField").getString("stringField"),
+            actual.getStruct("newNestedField").getString("stringField")
+        )
         assertEquals(expected.getArray<String>("newArray"), actual.getArray<String>("newArray"))
     }
 
