@@ -17,11 +17,11 @@ val artifactoryPassword =
 
 
 plugins {
-    kotlin("jvm") version "1.6.20"
+    kotlin("jvm") version "1.6.21"
     idea // Generates files that are used by IntelliJ IDEA, thus making it possible to open the project from IDEA
     `java-library` // Apply the java-library plugin for API and implementation separation.
     `maven-publish`
-    id("io.gitlab.arturbosch.detekt") version "1.20.0-RC2"
+    id("io.gitlab.arturbosch.detekt") version "1.20.0"
 }
 
 repositories {
@@ -33,8 +33,8 @@ val includeInJar by configurations.creating {
 }
 
 dependencies {
-    val kafkaConnectVersion = "3.+"
-    val jsltLibVersion = "0.1.11"
+    val kafkaConnectVersion = "3.2.+"
+    val jsltLibVersion = "0.1.12"
     val junitVersion = "5.8.2"
 
     compileOnly(platform("org.jetbrains.kotlin:kotlin-bom")) // Align versions of all Kotlin components
