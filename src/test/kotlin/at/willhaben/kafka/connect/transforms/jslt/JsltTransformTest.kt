@@ -1,5 +1,7 @@
 package at.willhaben.kafka.connect.transforms.jslt
 
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.connect.data.SchemaBuilder
 import org.apache.kafka.connect.data.Struct
@@ -17,6 +19,7 @@ import kotlin.test.assertTrue
 class JsltTransformTest {
     private val xformKey: JsltTransform<SourceRecord> = JsltTransform.Key()
     private val xformValue: JsltTransform<SourceRecord> = JsltTransform.Value()
+    private val objectMapper = ObjectMapper()
 
     @AfterEach
     fun teardown() {
@@ -117,21 +120,22 @@ class JsltTransformTest {
             .put("arrayField", arrayOf("ElemA", "ElemB", "ElemC").toList())
             .put("bytes", "byteArray".toByteArray())
 
-        val actual: Struct = xformValue.apply(given).value() as Struct
-        assertEquals(expected.getInt32("numberField"), actual.getInt32("numberField"))
-        assertEquals(expected.getFloat32("floatField"), actual.getFloat32("floatField"))
-        assertEquals(expected.getString("stringField"), actual.getString("stringField"))
-        assertEquals(expected.getBoolean("booleanField"), actual.getBoolean("booleanField"))
+        val actual: JsonNode = objectMapper.readValue(xformValue.apply(given).value() as String, JsonNode::class.java)
+        assertEquals(expected.getInt32("numberField"), actual.get("numberField").asInt())
+        assertEquals(expected.getFloat32("floatField"), actual.get("floatField").asDouble().toFloat())
+        assertEquals(expected.getString("stringField"), actual.get("stringField").asText())
+        assertEquals(expected.getBoolean("booleanField"), actual.get("booleanField").asBoolean())
         assertEquals(
             expected.getStruct("recordField").getInt32("valueA"),
-            actual.getStruct("recordField").getInt32("valueA")
+            actual.get("recordField").get("valueA").asInt()
         )
         assertEquals(
             expected.getStruct("recordField").getString("valueB"),
-            actual.getStruct("recordField").getString("valueB")
+            actual.get("recordField").get("valueB").asText()
         )
-        assertEquals(expected.getArray<String>("arrayField"), actual.getArray<String>("arrayField"))
-        assertEquals(expected.getBytes("bytes").toList(), actual.getBytes("bytes").toList())
+        assertEquals(expected.getArray<String>("arrayField"),
+            actual.get("arrayField").elements().asSequence().map { it.asText() }.toList())
+        assertEquals(expected.getBytes("bytes").toList(), actual.get("bytes").binaryValue().toList())
     }
 
     @Test
@@ -156,10 +160,10 @@ class JsltTransformTest {
         val key = Collections.singletonMap("A", Collections.singletonMap("B", 12))
         val src = SourceRecord(null, null, "topic", null, key, null, null)
         val transformed: SourceRecord = xformKey.apply(src)
-        assertTrue(transformed.keySchema() is Schema)
-        assertTrue(transformed.key() is Struct)
-        val transformedMap = transformed.key() as Struct
-        assertEquals(12, transformedMap.getStruct("A").getInt32("B"))
+        assertTrue(transformed.keySchema() == null)
+        assertTrue(transformed.key() is String)
+        val actual: JsonNode = objectMapper.readValue(transformed.key() as String, JsonNode::class.java)
+        assertEquals(12, actual.get("A").get("B").asInt())
     }
 
     @Test

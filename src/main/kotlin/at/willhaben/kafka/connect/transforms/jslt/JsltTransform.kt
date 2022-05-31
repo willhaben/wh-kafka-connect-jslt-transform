@@ -89,8 +89,8 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
     private fun applySchemaless(record: R): R {
         val value = Requirements.requireMap(operatingValue(record), PURPOSE)
         val inputValueJsonNode = objectMapper.valueToTree<JsonNode>(value)
-        val outputValue = convert(inputValueJsonNode)
-        return newRecord(record, outputValue?.schema(), outputValue)
+        val outputValue = jsltExpression.apply(inputValueJsonNode).toString()
+        return newRecord(record, null, outputValue)
     }
 
 
@@ -123,7 +123,7 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
         jsonNode: JsonNode,
         schema: Schema,
         struct: Struct? = null,
-        fieldName: String? = null
+        fieldName: String? = null,
     ) {
         when (jsonNode.nodeType) {
             JsonNodeType.ARRAY -> {
