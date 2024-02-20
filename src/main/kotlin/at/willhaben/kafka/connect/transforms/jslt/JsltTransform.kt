@@ -149,7 +149,10 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
                         convertJsonNodeToValue(elem, schema!!.valueSchema())
                     }.toList()
                 } else {
-                    null
+                    // Do not return null when an empty input array is passed, as this
+                    // would cause the schema validation later on to fail as no optional
+                    // types are created for the source schema.
+                    emptyList()
                 }
             }
             JsonNodeType.BINARY -> jsonNode.binaryValue()
