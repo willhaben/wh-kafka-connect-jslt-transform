@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import java.util.*
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -591,5 +592,39 @@ class JsltTransformTest {
         )
         assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type())
         assertNull(transformed.value())
+    }
+
+    @Test
+    fun testNestedArrayAcceptsEmptyValueOnTransformation() {
+        // given
+        val givenJsltTransformation = """
+            {
+                "nestedObject": .someObject 
+            }
+        """.trimIndent()
+        configureNonTransformJslt(xformValue, givenJsltTransformation)
+
+        val givenNestedSchema = SchemaBuilder
+            .struct()
+            .field("emptyArrayField", SchemaBuilder.array(Schema.STRING_SCHEMA))
+        val givenInputSchema = SchemaBuilder
+            .struct()
+            .field("someObject", givenNestedSchema)
+
+        val givenInputData = Struct(givenInputSchema)
+            .put("someObject",
+                Struct(givenNestedSchema).put(
+                    "emptyArrayField", emptyList<String>()
+                )
+            )
+
+        // when
+        val actual: Struct = xformValue.apply(SourceRecord(null, null, "someTopic", 0,
+            givenInputSchema, givenInputData)).value() as Struct
+
+        // then
+        assertNotNull(actual)
+        assertNotNull(actual.getStruct("nestedObject"))
+        assertEquals(emptyList<String>(),  actual.getStruct("nestedObject").getArray<String>("emptyArrayField"))
     }
 }
