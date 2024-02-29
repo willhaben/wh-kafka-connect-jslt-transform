@@ -28,9 +28,11 @@ class JsltTransformTest {
         xformValue.close()
     }
 
-    fun configureNonTransformJslt(transform: JsltTransform<SourceRecord>, jslt: String = ".") {
+    fun configureNonTransformJslt(transform: JsltTransform<SourceRecord>, jslt: String = ".", schemaless: Boolean = false) {
         val props: MutableMap<String, String> = HashMap()
         props["jslt"] = jslt
+        if(schemaless)
+            props["jslt.schemaless"] = schemaless.toString()
         transform.configure(props.toMap())
     }
 
@@ -626,5 +628,44 @@ class JsltTransformTest {
         assertNotNull(actual)
         assertNotNull(actual.getStruct("nestedObject"))
         assertEquals(emptyList<String>(),  actual.getStruct("nestedObject").getArray<String>("emptyArrayField"))
+    }
+
+    @Test
+    fun testSchemalessConfigOptionToWriteOutputEvenIfNoSchemaCanBeInferred() {
+        // given
+        val givenJsltTransformation = """
+            {
+                "nestedObject": .
+            }
+        """.trimIndent()
+        configureNonTransformJslt(xformValue, givenJsltTransformation, true)
+
+        val legacyAttributeSchema = SchemaBuilder
+            .struct()
+            .field("code", Schema.STRING_SCHEMA)
+            .field("values", SchemaBuilder.array(Schema.STRING_SCHEMA))
+        val givenInputSchema = SchemaBuilder
+            .struct()
+            .field("legacyAttributes", SchemaBuilder.array(legacyAttributeSchema))
+
+        val givenInputData = Struct(givenInputSchema)
+            .put(
+                "legacyAttributes",
+                listOf<Struct>(
+                    Struct(legacyAttributeSchema)
+                        .put("code", "CONTACT/URL")
+                        .put("values", emptyList<String>()),
+                    Struct(legacyAttributeSchema)
+                        .put("code", "VAN_MODEL/MODEL")
+                        .put("values", listOf("Sonstige"))
+                )
+            )
+
+        // when
+        val actual: String = xformValue.apply(SourceRecord(null, null, "someTopic", 0,
+            givenInputSchema, givenInputData)).value() as String
+
+        // then
+        assertEquals("{\"nestedObject\":{\"legacyAttributes\":[{\"code\":\"CONTACT/URL\",\"values\":[]},{\"code\":\"VAN_MODEL/MODEL\",\"values\":[\"Sonstige\"]}]}}", actual)
     }
 }
