@@ -31,6 +31,7 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
                     "the record key (<code>" + Key::class.java.name + "</code>) " +
                     "or value (<code>" + Value::class.java.name + "</code>).")
         private const val JSLT_CONFIG = "jslt"
+        private const val JSLT_SCHEMALESS_CONFIG = "jslt.schemaless"
         val CONFIG_DEF: ConfigDef = ConfigDef()
             .define(
                 JSLT_CONFIG,
@@ -38,6 +39,13 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
                 ConfigDef.Importance.MEDIUM,
                 "JSLT expression that returns the transformed object"
             )
+            .define(
+                JSLT_SCHEMALESS_CONFIG,
+                ConfigDef.Type.BOOLEAN,
+                false,
+                ConfigDef.Importance.MEDIUM,
+                "If set to true no output schema will be interfered from the transformed output"
+                )
         private const val PURPOSE = "jslt-transform"
     }
 
@@ -46,11 +54,13 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
 
     private lateinit var jslt: String
     private lateinit var jsltExpression: Expression
+    private var forceApplySchemaless: Boolean = false
 
     override fun configure(props: Map<String?, *>?) {
         val config = SimpleConfig(CONFIG_DEF, props)
         jslt = config.getString(JSLT_CONFIG)
         jsltExpression = Parser.compileString(jslt)
+        forceApplySchemaless = config.getBoolean(JSLT_SCHEMALESS_CONFIG)
     }
 
     override fun apply(record: R): R {
@@ -59,6 +69,9 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
         return when {
             operatingValue(record) == null -> {
                 record
+            }
+            operatingSchema(record) != null && forceApplySchemaless -> {
+                applyFromSchemaToSchemalessOutput(record)
             }
             operatingSchema(record) == null -> {
                 applySchemaless(record)
@@ -89,6 +102,17 @@ abstract class JsltTransform<R : ConnectRecord<R>?> : Transformation<R> {
     private fun applySchemaless(record: R): R {
         val value = Requirements.requireMap(operatingValue(record), PURPOSE)
         val inputValueJsonNode = objectMapper.valueToTree<JsonNode>(value)
+        val outputValue = jsltExpression.apply(inputValueJsonNode).toString()
+        return newRecord(record, null, outputValue)
+    }
+
+    private fun applyFromSchemaToSchemalessOutput(record: R): R {
+        val value = Requirements.requireStruct(operatingValue(record), PURPOSE)
+        val schema = operatingSchema(record)
+        val topic = record?.topic()
+
+        val valueAsJsonBytes = jsonConverter.fromConnectData(topic, schema, value)
+        val inputValueJsonNode = objectMapper.readTree(valueAsJsonBytes)
         val outputValue = jsltExpression.apply(inputValueJsonNode).toString()
         return newRecord(record, null, outputValue)
     }

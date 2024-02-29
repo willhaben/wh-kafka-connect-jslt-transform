@@ -4,7 +4,7 @@
 
 
 group = "at.willhaben.kafka.connect.transforms.jslt"
-version = System.getenv("VERSION") ?: "1.0.0"
+version = System.getenv("VERSION") ?: "1.2.0"
 
 val javaVersion = 11
 
